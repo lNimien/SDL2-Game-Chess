@@ -46,14 +46,14 @@ void Game::Input()
 	case SDL_MOUSEBUTTONDOWN:
 		if (event.button.button == SDL_BUTTON_LEFT) 
 		{
-			int boardWidth = 8 * SQUARE_SIZE;
-			int boardHeight = 8 * SQUARE_SIZE;
+			int boardWidth = MaxRows * SQUARE_SIZE;
+			int boardHeight = MaxRows * SQUARE_SIZE;
 
 			int boardPosX = (WinValueX - boardWidth) / 2;
 			int boardPosY = (WinValueY - boardHeight) / 2;
 
-			int cellWidth = boardWidth / 8;
-			int cellHeight = boardHeight / 8;
+			int cellWidth = boardWidth / MaxRows;
+			int cellHeight = boardHeight / MaxRows;
 
 			int row = (event.button.y - boardPosY) / cellHeight;
 			int column = (event.button.x - boardPosX) / cellWidth;
@@ -61,67 +61,51 @@ void Game::Input()
 			printf("Fila: %d, Columna: %d\n", row, column);
 			int TmpLastRow = row;
 			int TmpLastColum = column;
-			if (row >= 0 && row < 8 && column >= 0 && column < 8)
+			if (row >= 0 && row < MaxRows && column >= 0 && column < MaxRows)
 			{
 				Cell* clickedCell = m_pTablero->m_pCells[row][column];
 				
-				if (clickedCell->pPiece && !clickedCell->bVisibleRedTexture)
+				if (clickedCell->bCanOnePieceMoveHere == true)
+				{
+					Cell* NewCell = m_pTablero->m_pCells[row][column];
+					if (NewCell)
+						NewCell->pPiece = m_pTmpPiece;
+
+					Cell* LastCell = m_pTmpCell;
+					if (LastCell)
+						LastCell->pPiece = nullptr;
+
+					LimpiarCeldas();
+				}
+				else if (clickedCell->pPiece && !clickedCell->bVisibleRedTexture)
 				{
 					clickedCell->pPiece->GetMoves(row, column, m_pTablero);
 					m_pTmpPiece = clickedCell->pPiece;
 					m_pTmpCell = clickedCell;
-					m_pTmpCell->Row = row;
-					m_pTmpCell->Colum = column;
 				}
 				else
 				{
-					if (m_pTmpPiece && m_pTmpPiece->CanMove(row, column, m_pTablero, m_pTmpCell->Row, m_pTmpCell->Colum))
-					{
-						Cell* NewCell = m_pTablero->m_pCells[row][column];
-
-						if (NewCell)
-							NewCell->pPiece = m_pTmpPiece;
-
-
-						Cell* LastCell = m_pTmpCell;
-						if (LastCell)
-							LastCell->pPiece = nullptr;
-
-					}
-
 					m_pTmpCell = nullptr;
 					m_pTmpPiece = nullptr;
 
-					for (int i = 0; i < 8; i++)
-					{
-						for (int j = 0; j < 8; j++)
-						{
-							m_pTablero->m_pCells[i][j]->ClearVisibleBallTextures(); // limpiamos todas las casillas
-						}
-					}
+					LimpiarCeldas();
 				}
 			}
 			else
 			{
-				for (int i = 0; i < 8; i++)
-				{
-					for (int j = 0; j < 8; j++)
-					{
-						m_pTablero->m_pCells[i][j]->ClearVisibleBallTextures(); // limpiamos todas las casillas
-					}
-				}
+				LimpiarCeldas();
 			}
 		}
 		else if (event.button.button == SDL_BUTTON_RIGHT)
 		{
-			int boardWidth = 8 * SQUARE_SIZE;
-			int boardHeight = 8 * SQUARE_SIZE;
+			int boardWidth = MaxRows * SQUARE_SIZE;
+			int boardHeight = MaxRows * SQUARE_SIZE;
 
 			int boardPosX = (WinValueX - boardWidth) / 2;
 			int boardPosY = (WinValueY - boardHeight) / 2;
 
-			int cellWidth = boardWidth / 8;
-			int cellHeight = boardHeight / 8;
+			int cellWidth = boardWidth / MaxRows;
+			int cellHeight = boardHeight / MaxRows;
 
 			int row = (event.button.y - boardPosY) / cellHeight;
 			int column = (event.button.x - boardPosX) / cellWidth;
@@ -197,12 +181,23 @@ void Game::LoadTextures()
 	SDL_FreeSurface(tmpSurface);
 }
 
+void Game::LimpiarCeldas()
+{
+	for (int i = 0; i < MaxRows; i++)
+	{
+		for (int j = 0; j < MaxRows; j++)
+		{
+			m_pTablero->m_pCells[i][j]->ClearAll(); // limpiamos todas las casillas
+		}
+	}
+}
+
 
 Tablero::Tablero()
 {
-	for (int j = 0; j < 8; j++)
+	for (int j = 0; j < MaxRows; j++)
 	{
-		for (int i = 0; i < 8; i++)
+		for (int i = 0; i < MaxRows; i++)
 		{
 			m_pCells[j][i] = nullptr;
 		}
@@ -215,15 +210,15 @@ Tablero::~Tablero()
 
 void Tablero::Init(SDL_Renderer* Render)
 {
-	for (int y = 0; y < 8; ++y)
+	for (int y = 0; y < MaxRows; ++y)
 	{
-		for (int x = 0; x < 8; ++x)
+		for (int x = 0; x < MaxRows; ++x)
 		{
 			m_pCells[y][x] = new Cell(); 
 			m_pCells[y][x]->LoadTextureCell(Render, ((x + y) % 2 == 0) ? "assets/white.png" : "assets/dark.png", Cells);
 			m_pCells[y][x]->LoadTextureCell(Render, "assets/bolita.png",Ball);
 			m_pCells[y][x]->LoadTextureCell(Render, "assets/red.png",RedCells);
-
+			m_pCells[y][x]->bCanOnePieceMoveHere = false;
 			m_pCells[y][x]->Color = ((x + y) % 2 == 0) ? WHITE : BLACK;
 
 			if (y == 0) 
@@ -286,18 +281,38 @@ void Tablero::Init(SDL_Renderer* Render)
 	}
 }
 
+bool Tablero::IsUnderEnemyControl(int row, int column, int enemyColor)
+{
+	for (int i = 0; i < MaxRows; i++)
+	{
+		for (int j = 0; j < MaxRows; j++)
+		{
+			Cell* cell = m_pCells[i][j];
+
+			if (cell->pPiece && cell->pPiece->Color == enemyColor) // solo color del enemigo
+			{
+				if (cell->pPiece->CanMoveTo(row,column,this, i,j))
+				{
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
 void Tablero::Render(SDL_Renderer* Render)
 {
 	//tablero
-	int boardWidth = 8 * SQUARE_SIZE;
-	int boardHeight = 8 * SQUARE_SIZE;
+	int boardWidth = MaxRows * SQUARE_SIZE;
+	int boardHeight = MaxRows * SQUARE_SIZE;
 
 	int startX = (WinValueX - boardWidth) / 2;
 	int startY = (WinValueY - boardHeight) / 2;
 
-	for (int i = 0; i < 8; ++i)
+	for (int i = 0; i < MaxRows; ++i)
 	{
-		for (int j = 0; j < 8; ++j)
+		for (int j = 0; j < MaxRows; ++j)
 		{
 			int x = startX + j * SQUARE_SIZE;
 			int y = startY + i * SQUARE_SIZE;
@@ -332,9 +347,8 @@ void Tablero::Render(SDL_Renderer* Render)
 
 Cell::Cell()
 {
+	bCanOnePieceMoveHere = false;
 	Color = OVERALL;
-	Row = 0;
-	Colum = 0;
 	bVisibleBallTexture = false;
 	bVisibleRedTexture = false;
 }
@@ -343,11 +357,23 @@ Cell::~Cell()
 {
 }
 
+void Cell::ClearStateMoveHere()
+{
+	bCanOnePieceMoveHere = false;
+}
+
 
 void Cell::ClearVisibleBallTextures()
 {
 	bVisibleBallTexture = false;
 	bVisibleRedTexture = false;
+}
+
+void Cell::ClearAll()
+{
+	bVisibleBallTexture = false;
+	bVisibleRedTexture = false;
+	bCanOnePieceMoveHere = false;
 }
 
 void Cell::LoadTextureCell(SDL_Renderer* Render, const std::string& filePath, int bType)
@@ -409,9 +435,9 @@ ChessPiece::~ChessPiece()
 
 void ChessPiece::Clear(Tablero* MainTablero)
 {
-	for (int i = 0; i < 8; i++)
+	for (int i = 0; i < MaxRows; i++)
 	{
-		for (int j = 0; j < 8; j++)
+		for (int j = 0; j < MaxRows; j++)
 		{
 			MainTablero->m_pCells[i][j]->ClearVisibleBallTextures(); // limpiamos todas las casillas
 		}
@@ -446,54 +472,57 @@ void Pawn::GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero)
 	Cell* nextCell1 = MainTablero->m_pCells[nextRow1][InitialColum];
 
 
-	if (nextRow1 >= 0 && nextRow1 < 8)
+	if (nextRow1 >= 0 && nextRow1 < MaxRows)
 	{
 		if (!nextCell1->pPiece) // next vacia
 		{
 			nextCell1->bVisibleBallTexture = true;
+			nextCell1->bCanOnePieceMoveHere = true;
 		}
 	}
 
-	//caso especial peon al inicio
-	MovimientoInicial(InitialRow, InitialColum, MainTablero);
+
+
+	if (startRow == InitialRow)
+	{
+		int nextRow2 = InitialRow + 2 * direction;
+		Cell* nextCell2 = MainTablero->m_pCells[nextRow2][InitialColum];
+		if (!nextCell2->pPiece)
+		{
+			nextCell2->bVisibleBallTexture = true;
+			nextCell2->bCanOnePieceMoveHere = true;
+		}
+
+	}
 	
 }
 
-bool Pawn::CanMove(int DestinationRow, int DestinationColumn, Tablero* MainTablero, int InitialRow, int InitialColumn)
+bool Pawn::CanMoveTo(int Row, int Column, Tablero* MainTablero, int PieceRow, int PieceColumn) 
 {
 	int direction = (Color == WHITE) ? -1 : 1;
-	int nextRow = InitialRow + direction; 
+	int targetRow = PieceRow + direction;
+	int targetColumnLeft = PieceColumn - 1;
+	int targetColumnRight = PieceColumn + 1;
 
-	Cell* ClickedCell = MainTablero->m_pCells[DestinationRow][DestinationColumn];
-
-	if (nextRow >= 0 && nextRow < 8 && !ClickedCell->pPiece)
+	//left
+	if (targetRow >= 0 && targetRow < MaxRows && targetColumnLeft >= 0 && targetColumnLeft < MaxRows)
 	{
-		if (InitialColumn != DestinationColumn && DestinationRow != InitialRow) // si se mueve en diagonal y no hay pieza en esa casilla
+		if (targetRow == Row && targetColumnLeft == Column)
 		{
-			return false;
-		}
-		if ((InitialRow == 6 && Color == WHITE) || (InitialRow == 1 && Color == BLACK))
-		{
-			if (abs(nextRow - DestinationRow) < 2) 
-			{
-				return true;
-			}
-		}
-		else
-		{
-			if (nextRow - DestinationRow == 0 ) // se mueve una casilla solo
-			{
-				return true;
-			}
-		}
-	}
-	else if (nextRow >= 0 && nextRow < 8)
-	{
-		if (ClickedCell->pPiece && ClickedCell->pPiece->Color != Color)
 			return true;
+		}
+	}
+	//right 
+	if (targetRow >= 0 && targetRow < MaxRows && targetColumnRight >= 0 && targetColumnRight < MaxRows)
+	{
+		if (targetRow == Row && targetColumnRight == Column)
+		{
+			return true;
+		}
 	}
 
-	return false;
+
+	return false; // No se encontró ninguna pieza enemiga en las casillas diagonales
 }
 
 void Pawn::RemarcarDiagonalCells(int rowOffset, int InitialRow, int InitialColumn, Tablero* MainTablero) 
@@ -502,25 +531,15 @@ void Pawn::RemarcarDiagonalCells(int rowOffset, int InitialRow, int InitialColum
 	int targetRow = InitialRow + direction;
 	int targetColumn = InitialColumn + rowOffset;
 
-	if (targetRow >= 0 && targetRow < 8 && targetColumn >= 0 && targetColumn < 8) 
+	if (targetRow >= 0 && targetRow < MaxRows && targetColumn >= 0 && targetColumn < MaxRows)
 	{
 		Cell* diagonalCell = MainTablero->m_pCells[targetRow][targetColumn];
-		if (diagonalCell->pPiece && diagonalCell->pPiece->Color != Color) 
+		if (diagonalCell->pPiece && diagonalCell->pPiece->Color != Color)
+		{
+			diagonalCell->bCanOnePieceMoveHere = true;
 			diagonalCell->bVisibleRedTexture = true;
-	}
-}
+		}
 
-void Pawn::MovimientoInicial(int InitialRow, int InitialColum, Tablero* MainTablero)
-{
-	int direction = (Color == WHITE) ? -1 : 1;
-	int startRow = (Color == WHITE) ? 6 : 1;
-
-	if (startRow == InitialRow) 
-	{
-		int nextRow2 = InitialRow + 2 * direction;
-		Cell* nextCell2 = MainTablero->m_pCells[nextRow2][InitialColum];
-		if (!nextCell2->pPiece) 
-			nextCell2->bVisibleBallTexture = true;
 	}
 }
 
@@ -535,12 +554,127 @@ Rook::~Rook()
 
 void Rook::GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero)
 {
+	//Clear squares textures
+	Clear(MainTablero);
+
+
+	int direction = (Color == WHITE) ? -1 : 1;
+
+	std::vector<Cell*> vLineas;
+	Cell* ActualCell = MainTablero->m_pCells[InitialRow][InitialColum];
+
+	int newRow, newColumn;
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		// Derecha
+		newRow = InitialRow;
+		newColumn = InitialColum + offset;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		// Izquierda
+		newRow = InitialRow;
+		newColumn = InitialColum - offset;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		// Arriba
+		newRow = InitialRow - offset;
+		newColumn = InitialColum ;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		// Abajo
+		newRow = InitialRow + offset;
+		newColumn = InitialColum;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (auto cell : vLineas)
+	{
+		cell->bVisibleBallTexture = true;
+		cell->bCanOnePieceMoveHere = true;
+	}
+
+
+	vLineas.clear();
 }
 
-bool Rook::CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum)
+bool Rook::CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn)
 {
 	return false;
 }
+
 
 Knight::Knight(SDL_Texture* texture, int color)
 	: ChessPiece(texture, color)
@@ -553,9 +687,49 @@ Knight::~Knight()
 
 void Knight::GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero)
 {
+	//Clear squares textures
+	Clear(MainTablero);
+
+	int knightMoves[MaxRows][2] = { {-2, -1}, {-2, 1}, {-1, -2}, {-1, 2}, {1, -2}, {1, 2}, {2, -1}, {2, 1} };
+
+	Cell* ActualCell = MainTablero->m_pCells[InitialRow][InitialColum];
+	std::vector<Cell*> vSaltos;
+	for (int i = 0; i < MaxRows; i++)
+	{
+		int newRow = InitialRow + knightMoves[i][0];
+		int newColumn = InitialColum + knightMoves[i][1];
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < 8)
+		{
+			Cell* TargetCell = MainTablero->m_pCells[newRow][newColumn];
+
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vSaltos.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				continue;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				continue;
+			else
+				vSaltos.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (auto cell : vSaltos)
+	{
+		cell->bVisibleBallTexture = true;
+		cell->bCanOnePieceMoveHere = true;
+	}
+
+
+	vSaltos.clear();
 }
 
-bool Knight::CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum)
+bool Knight::CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn)
 {
 	return false;
 }
@@ -581,104 +755,92 @@ void Bishop::GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero)
 	Cell* ActualCell = MainTablero->m_pCells[InitialRow][InitialColum];
 
 	int newRow, newColumn;
-	for (int offset = 0; offset < 8; offset++) // esta dentro del tablero
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
 	{
 		//Diagonal Superior Izquierda
 		newRow = InitialRow + offset * direction;
 		newColumn = InitialColum - offset;
 
-
-
-		if (newRow >= 0 && newRow < 8 && newColumn >= 0 && newColumn < 8)
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
 		{
 			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
-			{
 				continue;
-			}
 
 			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
 			{
-				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true; break;
-			}
-			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
-			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true; 
+				vDiagonales.push_back(MainTablero->m_pCells[newRow][newColumn]);
 				break;
 			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
 			else
 				vDiagonales.push_back(MainTablero->m_pCells[newRow][newColumn]);
 		}
 	}
 
-	for (int offset = 0; offset < 8; offset++) // esta dentro del tablero
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
 	{
-
-
 		//Diagonal Superior derecha
 		newRow = InitialRow + offset * direction;
 		newColumn = InitialColum + offset;
-		if (newRow >= 0 && newRow < 8 && newColumn >= 0 && newColumn < 8)
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
 		{
 			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
-			{
 				continue;
-			}
 			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
 			{
-				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true; break;
-			}
-			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
-			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vDiagonales.push_back(MainTablero->m_pCells[newRow][newColumn]);
 				break;
 			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
 			else
 				vDiagonales.push_back(MainTablero->m_pCells[newRow][newColumn]);
 		}
 	}
 
-	for (int offset = 0; offset < 8; offset++) // esta dentro del tablero
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
 	{
 		//Diagonal inferior izquierda
 		newRow = InitialRow - offset * direction;
 		newColumn = InitialColum - offset;
-		if (newRow >= 0 && newRow < 8 && newColumn >= 0 && newColumn < 8)
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
 		{
 			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
-			{
 				continue;
-			}
 
 			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
 			{
-				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true; break;
-			}
-			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
-			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vDiagonales.push_back(MainTablero->m_pCells[newRow][newColumn]);
 				break;
 			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
 			else
 				vDiagonales.push_back(MainTablero->m_pCells[newRow][newColumn]);
 		}
 	}
 
-	for (int offset = 0; offset < 8; offset++) // esta dentro del tablero
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
 	{
 		//Diagonal inferior derecha
 		newRow = InitialRow - offset * direction;
 		newColumn = InitialColum + offset;
-		if (newRow >= 0 && newRow < 8 && newColumn >= 0 && newColumn < 8)
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
 		{
 			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
-			{
 				continue;
-			}
 			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
 			{
-				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true; break;
-			}
-			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
-			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vDiagonales.push_back(MainTablero->m_pCells[newRow][newColumn]);
 				break;
 			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
 			else
 				vDiagonales.push_back(MainTablero->m_pCells[newRow][newColumn]);
 		}
@@ -688,16 +850,36 @@ void Bishop::GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero)
 	for (auto cell : vDiagonales)
 	{
 		cell->bVisibleBallTexture = true;
+		cell->bCanOnePieceMoveHere = true;
 	}
 
 
 	vDiagonales.clear();
 }
 
-bool Bishop::CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum)
+bool Bishop::CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn) 
 {
-	return false;
+	int direction = (Color == WHITE) ? -1 : 1;
+	int rowDiff = PieceRow - InitialRow;
+	int colDiff = PieceColumn - InitialColum;
+
+	if (abs(rowDiff) != abs(colDiff)) 
+		return false;
+
+	int rowStep = (rowDiff > 0) ? 1 : -1;
+	int colStep = (colDiff > 0) ? 1 : -1;
+
+
+	for (int i = InitialRow + rowStep, j = InitialColum + colStep; i != PieceRow; i += rowStep, j += colStep) 
+	{
+		if (MainTablero->m_pCells[i][j]->pPiece != nullptr) 
+			return false;
+	}
+
+	// no se ha encontrado una pieza
+	return true;
 }
+
 
 Queen::Queen(SDL_Texture* texture, int color)
 	: ChessPiece(texture, color)
@@ -710,9 +892,215 @@ Queen::~Queen()
 
 void Queen::GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero)
 {
+	//Clear squares textures
+	Clear(MainTablero);
+
+
+	int direction = (Color == WHITE) ? -1 : 1;
+
+	std::vector<Cell*> vLineas;
+	Cell* ActualCell = MainTablero->m_pCells[InitialRow][InitialColum];
+
+	int newRow, newColumn;
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		//Diagonal Superior Izquierda
+		newRow = InitialRow + offset * direction;
+		newColumn = InitialColum - offset;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		//Diagonal Superior derecha
+		newRow = InitialRow + offset * direction;
+		newColumn = InitialColum + offset;
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		//Diagonal inferior izquierda
+		newRow = InitialRow - offset * direction;
+		newColumn = InitialColum - offset;
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		//Diagonal inferior derecha
+		newRow = InitialRow - offset * direction;
+		newColumn = InitialColum + offset;
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		// Derecha
+		newRow = InitialRow;
+		newColumn = InitialColum + offset;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		// Izquierda
+		newRow = InitialRow;
+		newColumn = InitialColum - offset;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		// Arriba
+		newRow = InitialRow - offset;
+		newColumn = InitialColum;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < MaxRows; offset++) // esta dentro del tablero
+	{
+		// Abajo
+		newRow = InitialRow + offset;
+		newColumn = InitialColum;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (auto cell : vLineas)
+	{
+		cell->bVisibleBallTexture = true;
+		cell->bCanOnePieceMoveHere = true;
+	}
+
+	vLineas.clear();
 }
 
-bool Queen::CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum)
+bool Queen::CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn)
 {
 	return false;
 }
@@ -728,9 +1116,228 @@ King::~King()
 
 void King::GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero)
 {
+	//Clear squares textures
+	Clear(MainTablero);
+
+
+	int direction = (Color == WHITE) ? -1 : 1;
+
+	std::vector<Cell*> vLineas;
+	Cell* ActualCell = MainTablero->m_pCells[InitialRow][InitialColum];
+
+	int newRow, newColumn;
+
+	for (int offset = 0; offset < 2; offset++) // esta dentro del tablero
+	{
+		//Diagonal Superior Izquierda
+		newRow = InitialRow + offset * direction;
+		newColumn = InitialColum - offset;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+
+			if (MainTablero->IsUnderEnemyControl(newRow,newColumn, Color == WHITE ? BLACK : WHITE))
+				continue;
+
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < 2; offset++) // esta dentro del tablero
+	{
+		//Diagonal Superior derecha
+		newRow = InitialRow + offset * direction;
+		newColumn = InitialColum + offset;
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+			if (MainTablero->IsUnderEnemyControl(newRow, newColumn, Color == WHITE ? BLACK : WHITE))
+				continue;
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < 2; offset++) // esta dentro del tablero
+	{
+		//Diagonal inferior izquierda
+		newRow = InitialRow - offset * direction;
+		newColumn = InitialColum - offset;
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+			if (MainTablero->IsUnderEnemyControl(newRow, newColumn, Color == WHITE ? BLACK : WHITE))
+				continue;
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < 2; offset++) // esta dentro del tablero
+	{
+		//Diagonal inferior derecha
+		newRow = InitialRow - offset * direction;
+		newColumn = InitialColum + offset;
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+			if (MainTablero->IsUnderEnemyControl(newRow, newColumn, Color == WHITE ? BLACK : WHITE))
+				continue;
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+
+	}
+
+	for (int offset = 0; offset < 2; offset++) // esta dentro del tablero
+	{
+		// Derecha
+		newRow = InitialRow;
+		newColumn = InitialColum + offset;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+			if (MainTablero->IsUnderEnemyControl(newRow, newColumn, Color == WHITE ? BLACK : WHITE))
+				continue;
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < 2; offset++) // esta dentro del tablero
+	{
+		// Izquierda
+		newRow = InitialRow;
+		newColumn = InitialColum - offset;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+			if (MainTablero->IsUnderEnemyControl(newRow, newColumn, Color == WHITE ? BLACK : WHITE))
+				continue;
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < 2; offset++) // esta dentro del tablero
+	{
+		// Arriba
+		newRow = InitialRow - offset;
+		newColumn = InitialColum;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+			if (MainTablero->IsUnderEnemyControl(newRow, newColumn, Color == WHITE ? BLACK : WHITE))
+				continue;
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (int offset = 0; offset < 2; offset++) // esta dentro del tablero
+	{
+		// Abajo
+		newRow = InitialRow + offset;
+		newColumn = InitialColum;
+
+		if (newRow >= 0 && newRow < MaxRows && newColumn >= 0 && newColumn < MaxRows)
+		{
+			if (ActualCell->pPiece == MainTablero->m_pCells[newRow][newColumn]->pPiece) // no chequeamos la misma row no tiene sentido
+				continue;
+			if (MainTablero->IsUnderEnemyControl(newRow, newColumn, Color == WHITE ? BLACK : WHITE))
+				continue;
+			if (MainTablero->m_pCells[newRow][newColumn]->pPiece && MainTablero->m_pCells[newRow][newColumn]->pPiece->Color != Color)
+			{
+				MainTablero->m_pCells[newRow][newColumn]->bVisibleRedTexture = true;
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+				break;
+			}
+			else if (MainTablero->m_pCells[newRow][newColumn]->pPiece)
+				break;
+			else
+				vLineas.push_back(MainTablero->m_pCells[newRow][newColumn]);
+		}
+	}
+
+	for (auto cell : vLineas)
+	{
+		cell->bVisibleBallTexture = true;
+		cell->bCanOnePieceMoveHere = true;
+	}
+
+	vLineas.clear();
+
 }
 
-bool King::CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum)
+bool King::CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn)
 {
 	return false;
 }

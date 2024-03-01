@@ -1,6 +1,8 @@
 #include "SDL.h"
 #include <vector>
 #include "string"
+#include "constants.h"
+
 class Cell;
 class ChessPiece;
 class Pawn;
@@ -10,7 +12,11 @@ struct Vector2
     float x;
     float y;
 };
-
+struct Color
+{
+    int WHITE = 0;
+    int BLACK = 1;
+};
 
 class Tablero
 {
@@ -20,7 +26,8 @@ public:
 
     void Render(SDL_Renderer* Render);
     void Init(SDL_Renderer* Render);
-    Cell* m_pCells[8][8];
+    bool IsUnderEnemyControl(int row, int column, int enemyColor);
+    Cell* m_pCells[MaxRows][MaxRows];
 private:
 
 };
@@ -49,6 +56,8 @@ public:
 
     SDL_Renderer* GetRender() { return MainRender; }
     SDL_Texture* backgroundTexture;
+
+    void LimpiarCeldas();
 private:
     bool bIsRuning;
     SDL_Window* MainWindow;
@@ -60,9 +69,9 @@ class Cell
 public:
     Cell();
     ~Cell();
-    int Row;
-    int Colum;
-    void ClearVisibleBallTextures();
+    void ClearStateMoveHere();
+    void ClearVisibleBallTextures(); 
+    void ClearAll();
     void LoadTextureCell(SDL_Renderer* Render, const std::string& filePath, int bType);
     SDL_Texture* Texture;
     SDL_Texture* BallTexture;
@@ -70,17 +79,14 @@ public:
     Vector2 vPostion;
     ChessPiece* pPiece;
     int Color;
+    bool bCanOnePieceMoveHere;
     bool bVisibleBallTexture;
     bool bVisibleRedTexture;
 private:
 
 };
 
-struct Color
-{
-    int WHITE = 0;
-    int BLACK = 1;
-};
+
 class ChessPiece
 {
 public:
@@ -89,10 +95,8 @@ public:
 
     int Color;
     virtual void GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero) = 0;
-    virtual bool CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum) = 0;
+    virtual bool CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn) = 0;
     virtual void Clear(Tablero* MainTablero);
-    void Render(SDL_Renderer* render);
-    SDL_Texture* LoadTexturePiece(SDL_Renderer* renderer, const std::string& filePath);
     SDL_Texture* Texture;
 
 };
@@ -104,9 +108,8 @@ public:
     ~Pawn();
 
     void GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero) override;
-    bool CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum) override;
+    bool CanMoveTo(int Row, int Column, Tablero* MainTablero, int PieceRow, int PieceColumn) override;
     void RemarcarDiagonalCells(int rowOffset, int InitialRow, int InitialColumn, Tablero* MainTablero);
-    void MovimientoInicial(int InitialRow, int InitialColum, Tablero* MainTablero);
 };
 
 class Rook : public ChessPiece
@@ -116,7 +119,7 @@ public:
     ~Rook();
 
     void GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero) override;
-    bool CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum) override;
+    bool CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn) override;
 };
 
 class Knight : public ChessPiece
@@ -126,7 +129,7 @@ public:
     ~Knight();
 
     void GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero) override;
-    bool CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum) override;
+    bool CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn) override;
 };
 
 class Bishop : public ChessPiece
@@ -136,7 +139,7 @@ public:
     ~Bishop();
 
     void GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero) override;
-    bool CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum) override;
+    bool CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn) override;
 };
 
 class Queen : public ChessPiece
@@ -146,7 +149,7 @@ public:
     ~Queen();
 
     void GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero) override;
-    bool CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum) override;
+    bool CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn) override;
 };
 
 class King : public ChessPiece
@@ -156,5 +159,5 @@ public:
     ~King();
 
     void GetMoves(int InitialRow, int InitialColum, Tablero* MainTablero) override;
-    bool CanMove(int InitialRow, int InitialColum, Tablero* MainTablero, int TmpLastRow, int TmpLastColum) override;
+    bool CanMoveTo(int InitialRow, int InitialColum, Tablero* MainTablero, int PieceRow, int PieceColumn) override;
 };
